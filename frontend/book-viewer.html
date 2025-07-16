@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReadShift Book Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            overflow: hidden;
+        }
+
+        .viewer-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            z-index: 50;
+            /* Lower than toolbar to prevent overlap */
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-280px);
+            /* Hide more of the sidebar */
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #34495e;
+            border-bottom: 1px solid #4a5f7a;
+        }
+
+        .book-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .book-author {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .chapter-list {
+            padding: 10px 0;
+        }
+
+        .chapter-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #4a5f7a;
+            transition: background 0.2s;
+        }
+
+        .chapter-item:hover {
+            background: #34495e;
+        }
+
+        .chapter-item.active {
+            background: #3498db;
+        }
+
+        .chapter-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .chapter-info {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        /* Sidebar Tabs */
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid #4a5f7a;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 12px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: #34495e;
+        }
+
+        .tab-btn.active {
+            background: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 10px 0;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Bookmarks */
+        .bookmark-controls {
+            padding: 10px 20px;
+            border-bottom: 1px solid #4a5f7a;
+        }
+
+        .bookmark-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #4a5f7a;
+            transition: background 0.2s;
+        }
+
+        .bookmark-item:hover {
+            background: #34495e;
+        }
+
+        .bookmark-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .bookmark-info {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        /* Highlights */
+        .highlight-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #4a5f7a;
+            transition: background 0.2s;
+        }
+
+        .highlight-item:hover {
+            background: #34495e;
+        }
+
+        .highlight-text {
+            font-size: 13px;
+            margin-bottom: 4px;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+
+        .highlight-text.yellow {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .highlight-text.green {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .highlight-text.blue {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .highlight-text.pink {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .highlight-meta {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin-left: 0;
+            /* Will be adjusted when sidebar is visible */
+            transition: margin-left 0.3s ease;
+        }
+
+        /* When sidebar is collapsed, ensure main content uses full width */
+        .viewer-container.sidebar-collapsed .main-content {
+            margin-left: 0;
+        }
+
+        /* Ensure proper spacing when sidebar is visible */
+        .viewer-container:not(.sidebar-collapsed) .main-content {
+            margin-left: 0;
+            /* Sidebar takes its own space in flexbox */
+        }
+
+        /* Toolbar */
+        .toolbar {
+            background: white;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+            z-index: 100;
+        }
+
+        .toolbar-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .toolbar-btn:hover {
+            background: #2980b9;
+        }
+
+        .toolbar-btn.secondary {
+            background: #95a5a6;
+        }
+
+        .toolbar-btn.secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .highlight-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        .highlight-btn {
+            width: 30px;
+            height: 30px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .highlight-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .highlight-btn.yellow {
+            background: #fff3cd;
+        }
+
+        .highlight-btn.green {
+            background: #d4edda;
+        }
+
+        .highlight-btn.blue {
+            background: #cce5ff;
+        }
+
+        .highlight-btn.pink {
+            background: #f8d7da;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #ecf0f1;
+            border-radius: 3px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #3498db;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        /* Reader Area */
+        .reader-area {
+            flex: 1;
+            background: white;
+            overflow-y: auto;
+            position: relative;
+            padding-top: 0;
+            /* Ensure no extra padding that might cause overlap */
+        }
+
+        .page-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 40px 80px 40px;
+            /* Added bottom padding for page number */
+            background: white;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            min-height: calc(100vh - 120px);
+            position: relative;
+        }
+
+        .page-content {
+            line-height: 1.8;
+            font-size: 16px;
+            color: #2c3e50;
+            text-align: justify;
+        }
+
+        .page-content p {
+            margin-bottom: 16px;
+        }
+
+        .chapter-header {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        /* Page Number */
+        .page-number {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: #7f8c8d;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ecf0f1;
+        }
+
+        /* Highlighting */
+        .highlight {
+            padding: 2px 0;
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .highlight.yellow {
+            background: #fff3cd;
+        }
+
+        .highlight.green {
+            background: #d4edda;
+        }
+
+        .highlight.blue {
+            background: #cce5ff;
+        }
+
+        .highlight.pink {
+            background: #f8d7da;
+        }
+
+        .highlight:hover::after {
+            content: '✏️';
+            position: absolute;
+            right: -20px;
+            top: 0;
+            font-size: 12px;
+        }
+
+        /* Selection */
+        ::selection {
+            background: rgba(52, 152, 219, 0.3);
+        }
+
+        /* Navigation */
+        .page-navigation {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .nav-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Toggle Sidebar */
+        .sidebar-toggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .sidebar-toggle:hover {
+            background: #34495e;
+            transform: scale(1.1);
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            font-size: 18px;
+            color: #7f8c8d;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                z-index: 200;
+                /* Higher than toolbar on mobile for overlay */
+                height: 100vh;
+            }
+
+            .sidebar.collapsed {
+                transform: translateX(-100%);
+            }
+
+            .page-container {
+                padding: 20px 20px 60px 20px;
+                /* Adjusted for mobile page number */
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="viewer-container" id="viewer-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="book-title" id="book-title">Loading...</div>
+                <div class="book-author" id="book-author">Please wait...</div>
+            </div>
+            <div class="sidebar-content">
+                <!-- Sidebar Tabs -->
+                <div class="sidebar-tabs">
+                    <button class="tab-btn active" onclick="showTab('chapters')">📚 Chapters</button>
+                    <button class="tab-btn" onclick="showTab('bookmarks')">🔖 Bookmarks</button>
+                    <button class="tab-btn" onclick="showTab('highlights')">✨ Highlights</button>
+                </div>
+
+                <!-- Chapters Tab -->
+                <div class="tab-content active" id="chapters-tab">
+                    <div class="chapter-list" id="chapter-list">
+                        <div class="loading">Loading chapters...</div>
+                    </div>
+                </div>
+
+                <!-- Bookmarks Tab -->
+                <div class="tab-content" id="bookmarks-tab">
+                    <div class="bookmark-controls">
+                        <button class="toolbar-btn" onclick="addBookmark()">+ Add Bookmark</button>
+                    </div>
+                    <div class="bookmark-list" id="bookmark-list">
+                        <div class="loading">Loading bookmarks...</div>
+                    </div>
+                </div>
+
+                <!-- Highlights Tab -->
+                <div class="tab-content" id="highlights-tab">
+                    <div class="highlight-list" id="highlight-list">
+                        <div class="loading">Loading highlights...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <button class="toolbar-btn secondary" onclick="toggleSidebar()">☰ Chapters</button>
+
+                <div class="highlight-controls">
+                    <span style="font-size: 14px; margin-right: 10px;"
+                        title="Select text to highlight, double-click highlights to remove">Highlight:</span>
+                    <div class="highlight-btn yellow" onclick="setHighlightColor('yellow')" title="Yellow highlight">
+                    </div>
+                    <div class="highlight-btn green" onclick="setHighlightColor('green')" title="Green highlight"></div>
+                    <div class="highlight-btn blue" onclick="setHighlightColor('blue')" title="Blue highlight"></div>
+                    <div class="highlight-btn pink" onclick="setHighlightColor('pink')" title="Pink highlight"></div>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+
+                <button class="toolbar-btn" onclick="goHome()">🏠 Home</button>
+            </div>
+
+            <!-- Reader Area -->
+            <div class="reader-area" id="reader-area">
+                <div class="page-container">
+                    <div class="page-content" id="page-content">
+                        <div class="loading">Loading book content...</div>
+                    </div>
+                    <div class="page-number" id="page-number">Page 1 of 1</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="page-navigation">
+        <button class="nav-btn" id="prev-btn" onclick="previousChapter()" title="Previous Chapter">‹</button>
+        <button class="nav-btn" id="next-btn" onclick="nextChapter()" title="Next Chapter">›</button>
+    </div>
+
+    <!-- Sidebar Toggle (for mobile) -->
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+
+    <script src="book-viewer.js"></script>
+</body>
+
+</html>
